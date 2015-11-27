@@ -76,22 +76,10 @@ int main(void)
 	P4OUT = 0;
 
 	uart_setup();
-	uart_puts("=^.^=\n");
+	uart_puts("\nmsp430fr5969 > ");
 
 	__eint();
-
-	while (1) {
-		__delay_cycles(1600000);
-		P4OUT = 0;
-		P1OUT = BIT0;
-		__delay_cycles(160000);
-		P4OUT = 0;
-		P1OUT = 0;
-		__delay_cycles(16000000);
-		P4OUT = 0;
-		__delay_cycles(160000);
-		P4OUT = 0;
-	}
+	__bis_SR_register(LPM0_bits);
 }
 
 #pragma vector=USCI_A0_VECTOR
@@ -99,11 +87,12 @@ __interrupt void USCI_A0_ISR(void)
 {
 	char buf;
 	if (UCA0IFG & UCRXIFG) {
-		P4OUT |= BIT6;
 		buf = UCA0RXBUF;
 		if (buf == '\r')
-			uart_putchar('\n');
-		else
+			uart_puts("\nmsp430fr5969 > ");
+		else if (buf == '\f')
+			uart_puts("\nmsp430fr5969 > ");
+		else if (buf != '\t')
 			uart_putchar(buf);
 	}
 }
