@@ -41,17 +41,17 @@ void uart_setup(void)
 	UCA0IRCTL = 0;
 	UCA0ABCTL = 0;
 
-	P2SEL0 &= ~BIT0;
-	P2SEL1 |= BIT0;
+	P2SEL0 &= ~(BIT0 | BIT1);
+	P2SEL1 |= BIT0 | BIT1;
 	P2DIR |= BIT0;
 
 	UCA0CTLW0 &= ~UCSWRST;
+
+	UCA0IE |= UCRXIE;
 }
 
 int main(void)
 {
-	int i = 0;
-
 	WDTCTL = WDTPW | WDTHOLD;
 
 	P1DIR = BIT0;
@@ -78,16 +78,32 @@ int main(void)
 	uart_setup();
 	uart_puts("=^.^=\n");
 
+	__eint();
+
 	while (1) {
-		__delay_cycles(160000*10);
+		__delay_cycles(1600000);
+		P4OUT = 0;
 		P1OUT = BIT0;
 		__delay_cycles(160000);
+		P4OUT = 0;
 		P1OUT = 0;
-		__delay_cycles(160000*10);
-		P4OUT = BIT6;
+		__delay_cycles(16000000);
+		P4OUT = 0;
 		__delay_cycles(160000);
 		P4OUT = 0;
-		uart_puthex(i++ % 255);
-		uart_putchar('\n');
+	}
+}
+
+#pragma vector=USCI_A0_VECTOR
+__interrupt void USCI_A0_ISR(void)
+{
+	char buf;
+	if (UCA0IFG & UCRXIFG) {
+		P4OUT |= BIT6;
+		buf = UCA0RXBUF;
+		if (buf == '\r')
+			uart_putchar('\n');
+		else
+			uart_putchar(buf);
 	}
 }
