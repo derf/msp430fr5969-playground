@@ -1,5 +1,8 @@
 #include <msp430.h>
 
+volatile char prompt[64];
+volatile unsigned int prompt_pos = 0;
+
 void uart_putchar(char c)
 {
 	while (!(UCA0IFG & UCTXIFG));
@@ -26,10 +29,17 @@ void uart_puthex(unsigned char num)
 		uart_putchar('A' + tmp - 10);
 }
 
-void uart_puts(const char* text)
+void uart_puts(char* text)
 {
 	while (*text)
 		uart_putchar(*text++);
+}
+
+void uart_nputs(char *text, int len)
+{
+	int i;
+	for (i = 0; i < len; i++)
+		uart_putchar(text[i]);
 }
 
 void uart_setup(void)
@@ -57,7 +67,7 @@ int main(void)
 	P1DIR = BIT0;
 	P1OUT = BIT0;
 	P4DIR = BIT6;
-	P4OUT = BIT6;
+	P4OUT = 0;
 
 	PM5CTL0 &= ~LOCKLPM5;
 
@@ -79,7 +89,10 @@ int main(void)
 	uart_puts("\nmsp430fr5969 > ");
 
 	__eint();
-	__bis_SR_register(LPM0_bits);
+	__bis_SR_register(LPM0_bits); // should not return
+
+	P4OUT |= BIT6;
+	return 0;
 }
 
 #pragma vector=USCI_A0_VECTOR
@@ -88,11 +101,22 @@ __interrupt void USCI_A0_ISR(void)
 	char buf;
 	if (UCA0IFG & UCRXIFG) {
 		buf = UCA0RXBUF;
-		if (buf == '\r')
+		if (buf == '\r') {
+
+			prompt_pos = 0;
 			uart_puts("\nmsp430fr5969 > ");
-		else if (buf == '\f')
+
+		} else if (buf == '\f') {
+
 			uart_puts("\nmsp430fr5969 > ");
-		else if (buf != '\t')
-			uart_putchar(buf);
+			uart_nputs(prompt, prompt_pos);
+
+		} else if (buf >= ' ') {
+
+			if (prompt_pos < sizeof(prompt)) {
+				prompt[prompt_pos++] = buf;
+				uart_putchar(buf);
+			}
+		}
 	}
 }
