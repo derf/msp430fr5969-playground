@@ -1,9 +1,6 @@
 #include <msp430.h>
 #include <string.h>
 
-volatile char prompt[64];
-volatile unsigned int prompt_pos = 0;
-
 void uart_putchar(char c)
 {
 	while (!(UCA0IFG & UCTXIFG));
@@ -73,6 +70,8 @@ int i2c_setup()
 	// use internal pull-ups
 	P1OUT |= (BIT6 | BIT7);
 	P1REN |= (BIT6 | BIT7);
+	// wait for bus to be pulled high
+	__delay_cycles(16000);
 
 	UCB0CTL1 &= ~UCSWRST;
 	UCB0I2CSA = 0;
@@ -84,7 +83,7 @@ int i2c_setup()
 
 void i2c_scan()
 {
-	int slave_addr;
+	unsigned char slave_addr;
 
 	uart_puts("     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f");
 	for (slave_addr = 0; slave_addr < 128; slave_addr++) {
@@ -111,14 +110,76 @@ void i2c_scan()
 	uart_puts("\n");
 }
 
-void check_command()
+int i2c_xmit(unsigned char slave_addr, unsigned char tx_bytes, unsigned char
+		rx_bytes, unsigned char* tx_buf, unsigned char* rx_buf)
 {
-	if (!strcmp(prompt, "i2cdetect")) {
+	int i;
+	UCB0I2CSA = slave_addr;
+	if (tx_bytes) {
+		UCB0CTL1 |= UCTR | UCTXSTT;
+		for (i = 0; i < tx_bytes; i++) {
+			while (!(UCB0IFG & (UCTXIFG0 | UCNACKIFG | UCCLTOIFG)));
+			if (UCB0IFG & (UCNACKIFG | UCCLTOIFG)) {
+				UCB0IFG &= ~UCNACKIFG;
+				UCB0IFG &= ~UCCLTOIFG;
+				UCB0CTL1 |= UCTXSTP;
+				return -1;
+			}
+			UCB0TXBUF = tx_buf[i];
+		}
+		while (!(UCB0IFG & (UCTXIFG0 | UCNACKIFG | UCCLTOIFG)));
+		//if (UCB0IFG & (UCNACKIFG | UCCLTOIFG)) {
+		//	UCB0IFG &= ~UCNACKIFG;
+		//	UCB0IFG &= ~UCCLTOIFG;
+		//	UCB0CTL1 |= UCTXSTP;
+		//	return -1;
+		//}
+	}
+	if (rx_bytes) {
+		UCB0I2CSA = slave_addr;
+		UCB0IFG &= ~UCTXIFG0;
+		UCB0IFG &= ~UCRXIFG0;
+		UCB0CTL1 &= ~UCTR;
+		UCB0CTL1 |= UCTXSTT;
+
+		while (UCB0CTL1 & UCTXSTT);
+		UCB0IFG &= ~UCTXIFG0;
+
+		for (i = 0; i < rx_bytes; i++) {
+			if (i == rx_bytes - 1)
+				UCB0CTL1 |= UCTXSTP;
+			while (!(UCB0IFG & (UCRXIFG0 | UCNACKIFG | UCCLTOIFG)));
+			rx_buf[i] = UCB0RXBUF;
+			UCB0IFG &= ~UCRXIFG0;
+		}
+		UCB0IFG &= ~UCRXIFG0;
+	}
+
+	//UCB0CTL1 |= UCTXSTP;
+
+	while (UCB0CTL1 & UCTXSTP);
+	return 0;
+}
+
+void check_command(unsigned char argc, char** argv)
+{
+	unsigned char i2c_rxbuf[16];
+	unsigned char i2c_txbuf[16];
+	if (!strcmp(argv[0], "i2cdetect")) {
 		if (i2c_setup() < 0) {
 			uart_puts("Error initalizing I²C: Bus is busy\n");
 			return;
 		}
 		i2c_scan();
+	}
+	else if (!strcmp(argv[0], "i2cgettemp")) {
+		i2c_txbuf[0] = 0x00;
+		i2c_xmit(0x4d, 1, 1, i2c_txbuf, i2c_rxbuf);
+		uart_puthex(i2c_rxbuf[0]);
+		uart_putchar('\n');
+	}
+	else {
+		uart_puts("Unknown command\n");
 	}
 }
 
@@ -131,16 +192,28 @@ int main(void)
 	P4DIR = BIT6;
 	P4OUT = 0;
 
+	PJSEL0 = BIT4 | BIT5;
+
 	PM5CTL0 &= ~LOCKLPM5;
 
 	FRCTL0 = FWPW;
 	FRCTL0_L = 0x10;
 	FRCTL0_H = 0xff;
 
+	// 16MHz DCO
 	CSCTL0_H = CSKEY >> 8;
 	CSCTL1 = DCORSEL | DCOFSEL_4;
 	CSCTL2 = SELA__VLOCLK | SELS__DCOCLK | SELM__DCOCLK;
 	CSCTL3 = DIVA__1 | DIVS__1 | DIVM__1;
+	CSCTL0_H = 0;
+
+	// enable LXFT for RTC
+	CSCTL0_H = CSKEY >> 8;
+	CSCTL4 &= ~LFXTOFF;
+	while (SFRIFG1 & OFIFG) {
+		CSCTL5 &= ~LFXTOFFG;
+		SFRIFG1 &= ~OFIFG;
+	}
 	CSCTL0_H = 0;
 
 	__delay_cycles(1000000);
@@ -160,15 +233,45 @@ int main(void)
 #pragma vector=USCI_A0_VECTOR
 __interrupt void USCI_A0_ISR(void)
 {
+	static char prompt[64];
+	static unsigned int prompt_pos = 0;
+
 	char buf;
+	unsigned char raw_p_pos, parse_p_pos;
+
+	char parsed_prompt[64];
+	unsigned char argc = 0;
+	char *argv[32];
+
 	if (UCA0IFG & UCRXIFG) {
 		buf = UCA0RXBUF;
 		if (buf == '\r') {
 
 			uart_putchar('\n');
-			check_command();
-			prompt_pos = 0;
-			*prompt = 0;
+			if (prompt_pos > 0) {
+
+				parse_p_pos = 0;
+				argv[0] = parsed_prompt;
+
+				for (raw_p_pos = 0; raw_p_pos < prompt_pos; raw_p_pos++) {
+					if (prompt[raw_p_pos] != ' ') {
+						parsed_prompt[parse_p_pos++] = prompt[raw_p_pos];
+					} else if ((raw_p_pos > 0) && (prompt[raw_p_pos-1] != ' ')) {
+						argc++;
+						parsed_prompt[parse_p_pos++] = 0;
+						argv[argc] = parsed_prompt + parse_p_pos;
+					}
+				}
+
+				if (parse_p_pos < 64)
+					parsed_prompt[parse_p_pos] = 0;
+				else
+					parsed_prompt[63] = 0;
+
+				check_command(argc, argv);
+				prompt_pos = 0;
+				*prompt = 0;
+			}
 			uart_puts("msp430fr5969 > ");
 
 		} else if (buf == '\f') {
@@ -185,7 +288,7 @@ __interrupt void USCI_A0_ISR(void)
 
 		} else if (buf >= ' ') {
 
-			if (prompt_pos < sizeof(prompt)) {
+			if (prompt_pos < sizeof(prompt)-1) {
 				prompt[prompt_pos++] = buf;
 				uart_putchar(buf);
 			}
