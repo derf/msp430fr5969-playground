@@ -1,6 +1,9 @@
 #include <msp430.h>
 #include <string.h>
 
+#define CALADC12_12V_30C  *((unsigned int *)0x1A1A)
+#define CALADC12_12V_85C  *((unsigned int *)0x1A1C)
+
 void uart_putchar(char c)
 {
 	while (!(UCA0IFG & UCTXIFG));
@@ -10,21 +13,36 @@ void uart_putchar(char c)
 		uart_putchar('\r');
 }
 
+void uart_putdigit(unsigned char digit)
+{
+	if (digit < 10)
+		uart_putchar('0' + digit);
+	else
+		uart_putchar('A' + digit - 10);
+}
+
 void uart_puthex(unsigned char num)
 {
 	int tmp;
 
-	tmp = (num & 0xf0) >> 4;
-	if (tmp < 10)
-		uart_putchar('0' + tmp);
-	else
-		uart_putchar('A' + tmp - 10);
+	uart_putdigit(num >> 4);
+	uart_putdigit(num & 0x0f);
+}
 
-	tmp = num & 0x0f;
-	if (tmp < 10)
-		uart_putchar('0' + tmp);
-	else
-		uart_putchar('A' + tmp - 10);
+void uart_putfloat(float num)
+{
+	if (num > 1000)
+		uart_putdigit(((int)num / 1000) % 10000);
+	if (num > 100)
+		uart_putdigit(((int)num / 100) % 10);
+	if (num > 10)
+		uart_putdigit(((int)num / 10));
+
+	uart_putdigit((int)num % 10);
+	uart_putchar('.');
+	uart_putdigit((int)(num * 10) % 10);
+	uart_putdigit((int)(num * 100) % 10);
+
 }
 
 void uart_puts(char* text)
@@ -163,6 +181,25 @@ int i2c_xmit(unsigned char slave_addr, unsigned char tx_bytes, unsigned char
 	return 0;
 }
 
+float adc_gettemp()
+{
+	while(REFCTL0 & REFGENBUSY);
+	REFCTL0 |= REFVSEL_0 | REFON;
+	ADC12CTL0 &= ~ADC12ENC;
+	ADC12CTL0 = ADC12SHT0_8 + ADC12ON;
+	ADC12CTL1 = ADC12SHP;
+	ADC12CTL3 = ADC12TCMAP;
+	ADC12MCTL0 = ADC12VRSEL_1 + ADC12INCH_30;
+	ADC12IER0 = 0x001;
+	while(!(REFCTL0 & REFGENRDY));
+	ADC12CTL0 |= ADC12ENC;
+	ADC12CTL0 |= ADC12SC;
+	while (ADC12CTL1 & ADC12BUSY);
+
+	return (float)(((long)ADC12MEM0 - CALADC12_12V_30C) * (85 - 30)) /
+		(CALADC12_12V_85C - CALADC12_12V_30C) + 30.0f;
+}
+
 void check_command(unsigned char argc, char** argv)
 {
 	unsigned char i2c_rxbuf[16];
@@ -191,6 +228,10 @@ void check_command(unsigned char argc, char** argv)
 			uart_puthex(i2c_rxbuf[0]);
 			uart_putchar('\n');
 		}
+	} else if (!strcmp(argv[0], "sensors")) {
+		uart_puts("Temperature : ");
+		uart_putfloat(adc_gettemp());
+		uart_puts("°C\n    Voltage : TODO\n");
 	} else {
 		uart_puts("Unknown command\n");
 	}
