@@ -4,6 +4,16 @@
 #define CALADC12_12V_30C  *((unsigned int *)0x1A1A)
 #define CALADC12_12V_85C  *((unsigned int *)0x1A1C)
 
+#define COL_BLACK "\e[0;30m"
+#define COL_RED "\e[0;31m"
+#define COL_GREEN "\e[0;32m"
+#define COL_YELLOW "\e[0;33m"
+#define COL_BLUE "\e[0;34m"
+#define COL_MAGENTA "\e[0;35m"
+#define COL_CYAN "\e[0;36m"
+#define COL_WHITE "\e[0;37m"
+#define COL_RESET "\e[0m"
+
 void uart_putchar(char c)
 {
 	while (!(UCA0IFG & UCTXIFG));
@@ -49,6 +59,13 @@ void uart_puts(char* text)
 {
 	while (*text)
 		uart_putchar(*text++);
+}
+
+void uart_puterr(char* text)
+{
+	uart_puts(COL_RED);
+	uart_puts(text);
+	uart_puts(COL_RESET);
 }
 
 void uart_nputs(char *text, int len)
@@ -206,20 +223,20 @@ void check_command(unsigned char argc, char** argv)
 	unsigned char i2c_txbuf[16];
 	if (!strcmp(argv[0], "i2c")) {
 		if (argc == 0) {
-			uart_puts("Usage: i2c <on|off|detect|gettemp> [-u]\n");
+			uart_puterr("Usage: i2c <on|off|detect|gettemp> [-u]\n");
 			return;
 		}
 		if (!strcmp(argv[1], "on")) {
 			if ((argc >= 2) && !strcmp(argv[2], "-u")) {
 				if (i2c_setup(1) < 0)
-					uart_puts("Error initializing I²C: Line is busy\n");
+					uart_puterr("Error initializing I²C: Line is busy\n");
 			} else {
 				if (i2c_setup(0) < 0)
-					uart_puts("Error initializing I²C: Line is busy\n"
+					uart_puterr("Error initializing I²C: Line is busy\n"
 							"Do you have hardware pullups on SDA/SCL?\n");
 			}
 		} else if (!strcmp(argv[1], "off")) {
-			uart_puts("Error: not implemented yet\n");
+			uart_puterr("Error: not implemented yet\n");
 		} else if (!strcmp(argv[1], "detect")) {
 			i2c_scan();
 		} else if (!strcmp(argv[1], "gettemp")) {
@@ -233,7 +250,7 @@ void check_command(unsigned char argc, char** argv)
 		uart_putfloat(adc_gettemp());
 		uart_puts("°C\n    Voltage : TODO\n");
 	} else {
-		uart_puts("Unknown command\n");
+		uart_puterr("Unknown command\n");
 	}
 }
 
@@ -275,7 +292,7 @@ int main(void)
 	P4OUT = 0;
 
 	uart_setup();
-	uart_puts("\nmsp430fr5969 > ");
+	uart_puts("\n" COL_YELLOW "msp430fr5969" COL_GREEN " > " COL_RESET);
 
 	__eint();
 	__bis_SR_register(LPM0_bits); // should not return
@@ -326,11 +343,11 @@ __interrupt void USCI_A0_ISR(void)
 				prompt_pos = 0;
 				*prompt = 0;
 			}
-			uart_puts("msp430fr5969 > ");
+			uart_puts(COL_YELLOW "msp430fr5969" COL_GREEN " > " COL_RESET);
 
 		} else if (buf == '\f') {
 
-			uart_puts("\nmsp430fr5969 > ");
+			uart_puts("\n" COL_YELLOW "msp430fr5969" COL_GREEN " > " COL_RESET);
 			uart_nputs(prompt, prompt_pos);
 
 		} else if (buf == 0x7f) {
