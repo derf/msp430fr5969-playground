@@ -58,7 +58,7 @@ void uart_setup(void)
 	UCA0IE |= UCRXIE;
 }
 
-int i2c_setup()
+int i2c_setup(int enable_pullups)
 {
 	UCB0CTL1 = UCSWRST;
 	UCB0CTLW0 = UCMODE_3 | UCMST | UCSYNC | UCSSEL_2 | UCSWRST | UCCLTO_1;
@@ -67,14 +67,16 @@ int i2c_setup()
 	P1SEL0 &= ~(BIT6 | BIT7);
 	P1SEL1 |= BIT6 | BIT7;
 
-	// use internal pull-ups
-	P1OUT |= (BIT6 | BIT7);
-	P1REN |= (BIT6 | BIT7);
-	// wait for bus to be pulled high
-	__delay_cycles(16000);
+	if (enable_pullups) {
+		P1OUT |= (BIT6 | BIT7);
+		P1REN |= (BIT6 | BIT7);
+	}
+
 
 	UCB0CTL1 &= ~UCSWRST;
 	UCB0I2CSA = 0;
+
+	__delay_cycles(1600);
 
 	if (UCB0STAT & UCBBUSY)
 		return -1;
@@ -165,20 +167,31 @@ void check_command(unsigned char argc, char** argv)
 {
 	unsigned char i2c_rxbuf[16];
 	unsigned char i2c_txbuf[16];
-	if (!strcmp(argv[0], "i2cdetect")) {
-		if (i2c_setup() < 0) {
-			uart_puts("Error initalizing I²C: Bus is busy\n");
+	if (!strcmp(argv[0], "i2c")) {
+		if (argc == 0) {
+			uart_puts("Usage: i2c <on|off|detect|gettemp> [-u]\n");
 			return;
 		}
-		i2c_scan();
-	}
-	else if (!strcmp(argv[0], "i2cgettemp")) {
-		i2c_txbuf[0] = 0x00;
-		i2c_xmit(0x4d, 1, 1, i2c_txbuf, i2c_rxbuf);
-		uart_puthex(i2c_rxbuf[0]);
-		uart_putchar('\n');
-	}
-	else {
+		if (!strcmp(argv[1], "on")) {
+			if ((argc >= 2) && !strcmp(argv[2], "-u")) {
+				if (i2c_setup(1) < 0)
+					uart_puts("Error initializing I²C: Line is busy\n");
+			} else {
+				if (i2c_setup(0) < 0)
+					uart_puts("Error initializing I²C: Line is busy\n"
+							"Do you have hardware pullups on SDA/SCL?\n");
+			}
+		} else if (!strcmp(argv[1], "off")) {
+			uart_puts("Error: not implemented yet\n");
+		} else if (!strcmp(argv[1], "detect")) {
+			i2c_scan();
+		} else if (!strcmp(argv[1], "gettemp")) {
+			i2c_txbuf[0] = 0x00;
+			i2c_xmit(0x4d, 1, 1, i2c_txbuf, i2c_rxbuf);
+			uart_puthex(i2c_rxbuf[0]);
+			uart_putchar('\n');
+		}
+	} else {
 		uart_puts("Unknown command\n");
 	}
 }
