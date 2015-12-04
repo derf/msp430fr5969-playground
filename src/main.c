@@ -357,6 +357,12 @@ __interrupt void USCI_A0_ISR(void)
 				uart_puts("\e[D \e[D");
 			}
 
+		} else if (buf == 0x17) { // ^W
+
+			for ( ; prompt_pos > 0; prompt_pos-- )
+				uart_puts("\e[D \e[D");
+			*prompt = 0;
+
 		} else if (buf >= ' ') {
 
 			if (prompt_pos < sizeof(prompt)-1) {
