@@ -33,8 +33,6 @@ void uart_putdigit(unsigned char digit)
 
 void uart_puthex(unsigned char num)
 {
-	int tmp;
-
 	uart_putdigit(num >> 4);
 	uart_putdigit(num & 0x0f);
 }
@@ -42,11 +40,11 @@ void uart_puthex(unsigned char num)
 void uart_putfloat(float num)
 {
 	if (num > 1000)
-		uart_putdigit(((int)num / 1000) % 10000);
+		uart_putdigit(((int)num % 10000) / 1000);
 	if (num > 100)
-		uart_putdigit(((int)num / 100) % 10);
+		uart_putdigit(((int)num % 1000) / 100);
 	if (num > 10)
-		uart_putdigit(((int)num / 10));
+		uart_putdigit(((int)num % 100) / 10);
 
 	uart_putdigit((int)num % 10);
 	uart_putchar('.');
@@ -200,21 +198,62 @@ int i2c_xmit(unsigned char slave_addr, unsigned char tx_bytes, unsigned char
 
 float adc_gettemp()
 {
+	float ret;
+
 	while(REFCTL0 & REFGENBUSY);
-	REFCTL0 |= REFVSEL_0 | REFON;
+	REFCTL0 = REFVSEL_0 | REFON;
 	ADC12CTL0 &= ~ADC12ENC;
-	ADC12CTL0 = ADC12SHT0_8 + ADC12ON;
+	ADC12CTL0 = ADC12SHT0_8 | ADC12ON;
 	ADC12CTL1 = ADC12SHP;
 	ADC12CTL3 = ADC12TCMAP;
-	ADC12MCTL0 = ADC12VRSEL_1 + ADC12INCH_30;
-	ADC12IER0 = 0x001;
+	ADC12MCTL0 = ADC12VRSEL_1 | ADC12INCH_30;
 	while(!(REFCTL0 & REFGENRDY));
 	ADC12CTL0 |= ADC12ENC;
 	ADC12CTL0 |= ADC12SC;
 	while (ADC12CTL1 & ADC12BUSY);
 
-	return (float)(((long)ADC12MEM0 - CALADC12_12V_30C) * (85 - 30)) /
+	ret = (float)((long)ADC12MEM0 - CALADC12_12V_30C) * (85 - 30) /
 		(CALADC12_12V_85C - CALADC12_12V_30C) + 30.0f;
+
+	// Disable ADC
+	ADC12CTL0 &= ~ADC12ENC; // disable any conversion to allow ADC configuration
+	ADC12CTL0 &= ~ADC12ON; // Turn off ADC
+	
+	// Disable internal 2V reference
+	while(REFCTL0 & REFGENBUSY);
+	REFCTL0 &= ~REFON;
+
+	return ret;
+}
+
+float adc_getvcc()
+{
+	float ret;
+
+	while(REFCTL0 & REFGENBUSY);
+	REFCTL0 = REFVSEL_1 | REFON;
+	ADC12CTL0 &= ~ADC12ENC;
+	ADC12CTL0 = ADC12SHT0_8 | ADC12ON;
+	ADC12CTL1 = ADC12SHP;
+	ADC12CTL3 = ADC12BATMAP;
+	ADC12MCTL0 = ADC12VRSEL_1 | ADC12INCH_31;
+	while(!(REFCTL0 & REFGENRDY));
+	ADC12CTL0 |= ADC12ENC;
+	ADC12CTL0 |= ADC12SC;
+	while (ADC12CTL1 & ADC12BUSY);
+
+	ret = (float)ADC12MEM0 / 4096 * 2 * 2;
+	return ret;
+
+	// Disable ADC
+	ADC12CTL0 &= ~ADC12ENC; // disable any conversion to allow ADC configuration
+	ADC12CTL0 &= ~ADC12ON; // Turn off ADC
+	
+	// Disable internal 2V reference
+	while(REFCTL0 & REFGENBUSY);
+	REFCTL0 &= ~REFON;
+
+	return ret;
 }
 
 void check_command(unsigned char argc, char** argv)
@@ -248,7 +287,9 @@ void check_command(unsigned char argc, char** argv)
 	} else if (!strcmp(argv[0], "sensors")) {
 		uart_puts("Temperature : ");
 		uart_putfloat(adc_gettemp());
-		uart_puts("°C\n    Voltage : TODO\n");
+		uart_puts("°C\n    Voltage : ");
+		uart_putfloat(adc_getvcc());
+		uart_puts("V\n");
 	} else {
 		uart_puterr("Unknown command\n");
 	}
