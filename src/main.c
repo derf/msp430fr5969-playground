@@ -297,7 +297,7 @@ void check_command(unsigned char argc, char** argv)
 			i2c_txbuf[0] = 0x00;
 			i2c_xmit(0x4d, 1, 1, i2c_txbuf, i2c_rxbuf);
 			uart_putint(i2c_rxbuf[0]);
-			uart_putchar('\n');
+			uart_puts("°C\n");
 		}
 	} else if (!strcmp(argv[0], "sensors")) {
 		uart_puts("Temperature : ");
@@ -317,7 +317,7 @@ int main(void)
 	P1DIR = BIT0;
 	P1OUT = BIT0;
 	P4DIR = BIT6;
-	P4OUT = 0;
+	P4OUT = BIT6;
 
 	PJSEL0 = BIT4 | BIT5;
 
