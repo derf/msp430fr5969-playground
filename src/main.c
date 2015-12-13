@@ -37,6 +37,21 @@ void uart_puthex(unsigned char num)
 	uart_putdigit(num & 0x0f);
 }
 
+void uart_putint(int num)
+{
+	if (num > 10000)
+		uart_putdigit(num / 10000);
+	if (num > 1000)
+		uart_putdigit((num % 10000) / 1000);
+	if (num > 100)
+		uart_putdigit((num % 1000) / 100);
+	if (num > 10)
+		uart_putdigit((num % 100) / 10);
+
+	uart_putdigit(num % 10);
+
+}
+
 void uart_putfloat(float num)
 {
 	if (num > 1000)
@@ -281,7 +296,7 @@ void check_command(unsigned char argc, char** argv)
 		} else if (!strcmp(argv[1], "gettemp")) {
 			i2c_txbuf[0] = 0x00;
 			i2c_xmit(0x4d, 1, 1, i2c_txbuf, i2c_rxbuf);
-			uart_puthex(i2c_rxbuf[0]);
+			uart_putint(i2c_rxbuf[0]);
 			uart_putchar('\n');
 		}
 	} else if (!strcmp(argv[0], "sensors")) {
