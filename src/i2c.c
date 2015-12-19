@@ -53,6 +53,7 @@ void i2c_scan()
 		}
 	}
 	uart_puts("\n");
+	UCB0IFG = 0;
 }
 
 int i2c_xmit(unsigned char slave_addr, unsigned char tx_bytes, unsigned char
