@@ -8,6 +8,8 @@ void check_command(unsigned char argc, char** argv)
 {
 	unsigned char i2c_rxbuf[16];
 	unsigned char i2c_txbuf[16];
+	float buf = 0;
+	int i;
 	if (!strcmp(argv[0], "i2c")) {
 		if (argc == 0) {
 			uart_puterr("Usage: i2c <on|off|detect|gettemp> [-u]\n");
@@ -33,9 +35,15 @@ void check_command(unsigned char argc, char** argv)
 			uart_puts("°C\n");
 		}
 	} else if (!strcmp(argv[0], "sensors")) {
+		for (i = 0; i < 32; i++) {
+			buf += adc_gettemp();
+			__delay_cycles(64000);
+		}
 		uart_puts("Temperature : ");
+		uart_putfloat(buf / 32);
+		uart_puts("°C avg / ");
 		uart_putfloat(adc_gettemp());
-		uart_puts("°C\n    Voltage : ");
+		uart_puts("°C single\n    Voltage : ");
 		uart_putfloat(adc_getvcc());
 		uart_puts("V\n");
 	} else {
