@@ -83,8 +83,7 @@ int i2c_xmit(unsigned char slave_addr, unsigned char tx_bytes, unsigned char
 	}
 	if (rx_bytes) {
 		UCB0I2CSA = slave_addr;
-		UCB0IFG &= ~UCTXIFG0;
-		UCB0IFG &= ~UCRXIFG0;
+		UCB0IFG = 0;
 		UCB0CTL1 &= ~UCTR;
 		UCB0CTL1 |= UCTXSTT;
 
@@ -101,7 +100,7 @@ int i2c_xmit(unsigned char slave_addr, unsigned char tx_bytes, unsigned char
 		UCB0IFG &= ~UCRXIFG0;
 	}
 
-	//UCB0CTL1 |= UCTXSTP;
+	UCB0CTL1 |= UCTXSTP;
 
 	while (UCB0CTL1 & UCTXSTP);
 	return 0;
