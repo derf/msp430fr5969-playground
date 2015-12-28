@@ -151,11 +151,19 @@ __interrupt void USCI_A0_ISR(void)
 				uart_puts("\e[D \e[D");
 			}
 
-		} else if (buf == 0x17) { // ^W
+		} else if (buf == 0x15) { // ^U
 
 			for ( ; prompt_pos > 0; prompt_pos-- )
 				uart_puts("\e[D \e[D");
 			*prompt = 0;
+
+		} else if (buf == 0x17) { // ^W
+
+			for ( ; (prompt_pos > 0) && (prompt[prompt_pos] != ' '); prompt_pos-- )
+				uart_puts("\e[D \e[D");
+			for ( ; (prompt_pos > 0) && (prompt[prompt_pos-1] == ' '); prompt_pos-- )
+				uart_puts("\e[D \e[D");
+			prompt[prompt_pos] = 0;
 
 		} else if (buf >= ' ') {
 
