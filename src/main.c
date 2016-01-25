@@ -34,6 +34,25 @@ void check_command(unsigned char argc, char** argv)
 			uart_putint(i2c_rxbuf[0]);
 			uart_puts("°C\n");
 		}
+		else if (!strcmp(argv[1], "eepr")) {
+			i2c_rxbuf[0] = 0;
+			i2c_txbuf[0] = 0;
+			i2c_txbuf[1] = argv[2][0];
+			i2c_xmit(0x50, 2, 1, i2c_txbuf, i2c_rxbuf);
+			uart_putint(i2c_rxbuf[0]);
+			uart_puts("\n");
+		}
+		else if (!strcmp(argv[1], "eepw")) {
+			i2c_txbuf[0] = 0;
+			i2c_txbuf[1] = argv[2][0];
+			i2c_txbuf[2] = argv[3][0];
+			i2c_txbuf[3] = argv[3][1];
+			i2c_txbuf[4] = argv[3][2];
+			i2c_txbuf[5] = argv[3][3];
+			i2c_txbuf[6] = argv[3][4];
+			i2c_txbuf[7] = argv[3][5];
+			i2c_xmit(0x50, 8, 0, i2c_txbuf, i2c_rxbuf);
+		}
 	} else if (!strcmp(argv[0], "sensors")) {
 		for (i = 0; i < 32; i++) {
 			buf += adc_gettemp();
