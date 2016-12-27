@@ -80,4 +80,9 @@ $(OUTDIR):
 clean:
 	-$(RM) $(OUTDIR)/*
 
-.PHONY: all clean
+program:
+	LD_LIBRARY_PATH=/home/derf/var/projects/msp430/MSP430Flasher_1.3.7 \
+	/home/derf/var/projects/msp430/MSP430Flasher_1.3.7/MSP430Flasher \
+	-w build/main.hex -v -g -z '[VCC]'
+
+.PHONY: all clean program
