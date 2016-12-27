@@ -65,6 +65,8 @@ void check_command(unsigned char argc, char** argv)
 		uart_puts("°C single\n    Voltage : ");
 		uart_putfloat(adc_getvcc());
 		uart_puts("V\n");
+	} else if (!strcmp(argv[0], "help")) {
+		uart_puts("Supported commands: i2c sensors\n");
 	} else {
 		uart_puterr("Unknown command\n");
 	}
