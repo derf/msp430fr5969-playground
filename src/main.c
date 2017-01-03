@@ -28,10 +28,15 @@ void check_command(unsigned char argc, char** argv)
 			uart_puterr("Error: not implemented yet\n");
 		} else if (!strcmp(argv[1], "detect")) {
 			i2c_scan();
-		} else if (!strcmp(argv[1], "gettemp")) {
+		} else if (!strcmp(argv[1], "tc74")) {
 			i2c_txbuf[0] = 0x00;
 			i2c_xmit(0x4d, 1, 1, i2c_txbuf, i2c_rxbuf);
 			uart_putint(i2c_rxbuf[0]);
+			uart_puts("°C\n");
+		} else if (!strcmp(argv[1], "lm75")) {
+			i2c_txbuf[0] = 0x00;
+			i2c_xmit(0x48, 1, 2, i2c_txbuf, i2c_rxbuf);
+			uart_putfloat(i2c_rxbuf[0] + (i2c_rxbuf[1] / 256.0));
 			uart_puts("°C\n");
 		}
 		else if (!strcmp(argv[1], "eepr")) {
