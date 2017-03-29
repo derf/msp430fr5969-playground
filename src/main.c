@@ -2,6 +2,7 @@
 #include <string.h>
 #include "adc.h"
 #include "i2c.h"
+#include "spi.h"
 #include "uart.h"
 
 void check_command(unsigned char argc, char** argv)
@@ -70,6 +71,24 @@ void check_command(unsigned char argc, char** argv)
 		uart_puts("°C single\n    Voltage : ");
 		uart_putfloat(adc_getvcc());
 		uart_puts("V\n");
+	} else if (!strcmp(argv[0], "spi")) {
+		if (argc == 0) {
+			uart_puterr("Usage: spi <on|off|sharp>\n");
+			return;
+		}
+		if (!strcmp(argv[1], "on")) {
+			spi_setup();
+		} else if (!strcmp(argv[1], "sharp")) {
+			P2DIR |= BIT4; // CS
+			P4DIR |= BIT2; // PWR
+			P4DIR |= BIT3; // EN
+			P2OUT &= ~BIT4;
+			P4OUT |= BIT2;
+			P4OUT |= BIT3;
+			P2OUT |= BIT4;
+			spi_xmit(3, 0, (unsigned char *)"\x20\x00\x00", NULL);
+			P2OUT &= ~BIT4;
+		}
 	} else if (!strcmp(argv[0], "help")) {
 		uart_puts("Supported commands: i2c sensors\n");
 	} else {

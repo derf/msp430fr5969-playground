@@ -14,13 +14,13 @@ TARGET = main
 # MCU: part number to build for
 MCU = msp430fr5969
 # SOURCES: list of input source sources
-SOURCES = main.c uart.c i2c.c adc.c
+SOURCES = main.c uart.c i2c.c spi.c adc.c
 # INCLUDES: list of includes, by default, use Includes directory
 INCLUDES = -IInclude
 # OUTDIR: directory to use for output
 OUTDIR = build
 # define flags
-CFLAGS = -mmcu=$(MCU) -g -Os -Wall -Wextra -Wunused $(INCLUDES)
+CFLAGS = -mmcu=$(MCU) -std=c99 -g -Os -Wall -Wextra -Wunused $(INCLUDES)
 ASFLAGS = -mmcu=$(MCU) -x assembler-with-cpp -Wa,-gstabs
 LDFLAGS = -mmcu=$(MCU) -Wl,-Map=$(OUTDIR)/$(TARGET).map
 #######################################
